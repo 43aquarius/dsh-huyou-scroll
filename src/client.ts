@@ -85,6 +85,17 @@ export interface HuyouComment {
   replyCount: number
 }
 
+/** 某条评论下的楼中楼回复（含「回的是谁」—— 回复触发式续评的依据） */
+export interface HuyouReply extends HuyouComment {
+  /** 回的是哪条（她的评论 id，或楼中楼里另一条回复） */
+  replyCommentId: string
+  /** 被回复的人（用来认出「回的是我」） */
+  replyUserName: string
+  replyUserId: string
+  /** epoch 毫秒（排序用 —— 实测 replylist 是正序，但代码里仍按 timeId 排保险） */
+  timeId: number
+}
+
 export interface HuyouUserInfo {
   userId: string
   userName: string
@@ -413,6 +424,46 @@ export class SohuClient {
       }
     }).filter((c) => c.commentId && c.content)
     return { comments, hasMore: Boolean(d.pageInfo?.hasMore) }
+  }
+
+  /** 某条评论下的回复列表（2026-10-25 闭环实测：条目含 replyCommentId/replyUserId，翻页用 score 游标） */
+  async commentReplyList(
+    commentId: string,
+    feedId: string,
+    score = 0,
+    count = 20,
+  ): Promise<{ replies: HuyouReply[]; hasMore: boolean; totalCount: number; nextScore: number }> {
+    const d = await this.call<{
+      list?: unknown[]
+      pageInfo?: { hasMore?: boolean; totalCount?: number; infoCount?: number; score?: number }
+    }>('/v8/comment/replylist', 'GET', {
+      stpl: '1,2,3,4,7,9,11,12,13,16',
+      comment_id: commentId,
+      score,
+      feed_id: feedId,
+      count,
+    })
+    const replies = (d.list ?? []).map((raw) => {
+      const r = raw as Record<string, unknown>
+      return {
+        commentId: String(r.commentId ?? ''),
+        content: String(r.content ?? ''),
+        userName: String(r.userName ?? ''),
+        userId: String(r.userId ?? ''),
+        likeCount: Number(r.likeCount ?? r.supportCount ?? 0),
+        replyCount: Number(r.replyCount ?? 0),
+        replyCommentId: String(r.replyCommentId ?? ''),
+        replyUserName: String(r.replyUserName ?? ''),
+        replyUserId: String(r.replyUserId ?? ''),
+        timeId: Number(r.timeId ?? 0),
+      } as HuyouReply
+    }).filter((r) => r.commentId && r.content)
+    return {
+      replies,
+      hasMore: Boolean(d.pageInfo?.hasMore),
+      totalCount: Number(d.pageInfo?.totalCount ?? d.pageInfo?.infoCount ?? replies.length),
+      nextScore: Number(d.pageInfo?.score ?? 0),
+    }
   }
 
   // ─────────────────── 写端点 ───────────────────

@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/T-Auto/dsh-std/8a15541117cb3c13ddb8f2468308691b6051d162/packages/manifest/schema/dsh-plugin-0.15.schema.json",
   "manifestVersion": "0.15",
-  "id": "dsh-huyou.local",
-  "name": "dsh-huyou",
-  "version": "0.1.0",
+  "id": "dsh-huyou-scroll.local",
+  "name": "dsh-huyou-scroll",
+  "version": "0.2.0",
   "license": "MIT",
-  "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端、圈子刷帖引擎、24h 生物钟、图帖/评论/简介，内置 fish-tone 人味掰话与接梗素材",
+  "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端、圈子刷帖引擎、24h 生物钟；一帖一评+回复触发续评（threads 回信账）；发帖默认纯文字、配图需 verifyImage 图文校验；内置 fish-tone 人味掰话与接梗素材",
   "facets": {
     "host": { "entry": "src/index.ts", "apiVersion": "v1alpha1" }
   },
@@ -16,8 +16,8 @@
   "contributes": {
     "x-display": [
       {
-        "title": "dsh-huyou",
-        "description": "狐友逆向 API：刷圈子 / 发评论 / 发图帖 / 改简介，人格自主运行 24 小时"
+        "title": "dsh-huyou-scroll",
+        "description": "狐友逆向 API：刷圈子 / 一帖一评+回复触发续评 / 发帖（默认纯文字，配图需验图文相符）/ 改简介，人格自主运行 24 小时"
       }
     ]
   }

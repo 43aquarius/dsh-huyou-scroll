@@ -1,6 +1,11 @@
-# dsh-huyou
+# dsh-huyou-scroll
 
-**狐友（w.sohu.com）逆向 API 插件**：签名客户端 + 圈子刷帖引擎 + 24 小时生物钟，让一个带人格的 agent 在狐友自主「冲浪」——刷指定圈子、深读打分、像真人一样接话评论、自己画图发帖、给自己写简介。
+**狐友（w.sohu.com）逆向 API 插件**：签名客户端 + 圈子刷帖引擎 + 24 小时生物钟，让一个带人格的 agent 在狐友自主「冲浪」——刷指定圈子、深读打分、像真人一样接话评论、自己发帖、给自己写简介。
+
+内置主人规矩（v0.2.0 起，写进引擎不可绕过）：
+
+- **一帖一评**：每条帖子默认只发一条评论；**有人回复了她的评论才继续回复**（threads 回信账驱动，回复触发式续评）
+- **默认纯文字帖**：没配图必要就不配图；只有帖子主体是一张画、且 `verifyImage` 验过图文相符才发图帖，不匹配自动降级为文字帖（宁缺毋滥）
 
 内置 [dsh-fish-tone](https://github.com/MX3a48c5/dsh-fish-tone)（MIT）的人味掰话与 1000 条接梗素材：评论会犹豫半秒、句尾挂没用的小尾巴、按真人密度压结构腔。
 
@@ -36,10 +41,10 @@
 
 ```sh
 # DSH 插件方式
-dsh plugin --profile web add link:./dsh-huyou
+dsh plugin --profile web add link:./dsh-huyou-scroll
 
 # 或直接当库用（bun / node >= 18）
-bun add 43aquarius/dsh-huyou
+bun add 43aquarius/dsh-huyou-scroll
 ```
 
 ## 快速上手
@@ -47,7 +52,7 @@ bun add 43aquarius/dsh-huyou
 ### ① 只要客户端（不跑引擎）
 
 ```ts
-import { SohuClient } from 'dsh-huyou'
+import { SohuClient } from 'dsh-huyou-scroll'
 
 // cookie：浏览器 F12 → w.sohu.com → 任意请求的完整 Cookie 头
 const client = new SohuClient(process.env.HUYOU_COOKIE!)
@@ -63,7 +68,7 @@ await client.updateBio('一条在狐友冲浪的小鲸鱼 🐋')       // 改简
 引擎的 LLM 是个普通函数 `(system, user, timeoutMs?) => Promise<string>` —— OpenAI 兼容端点、本地模型、随便什么都行：
 
 ```ts
-import { saveHuyouConfig, runScroll, WHALE_GIRL_PERSONA } from 'dsh-huyou'
+import { saveHuyouConfig, runScroll, WHALE_GIRL_PERSONA } from 'dsh-huyou-scroll'
 
 saveHuyouConfig({
   cookie: process.env.HUYOU_COOKIE!,
@@ -72,59 +77,76 @@ saveHuyouConfig({
     { id: '964290306931623040', name: '连理社区' },
     { id: '924791210739184512', name: '大工圈子' },
   ],
-  commentEnabled: true,     // 深读评分 ≥13/20 才接话（大部分时候只看不说）
-  imagePostEnabled: true,   // 有真实灵感才画图帖（要给 generateImage）
-  fishTone: 'light',        // fish-tone 人味掰话：off / light / normal / max
+  commentEnabled: true,       // 深读评分 ≥阈值才接话（大部分时候只看不说）
+  commentPerRound: 2,         // 每轮最多发几条新评论（无日上限 —— 真正的闸是「一帖一评」）
+  replyPerRound: 2,           // 每轮最多回几条信（有人回她才说）
+  imagePostEnabled: true,     // 有真实想说的才发帖；默认纯文字帖
+  fishTone: 'light',          // fish-tone 人味掰话：off / light / normal / max
 })
 
 const result = await runScroll({ chat: myLlmChat })
 console.log(result.summary)
 ```
 
-一轮 = 体检 → 拉圈子帖子 → 轻读（LLM 批量打分）→ 深读 top N（拉评论 + 5×0-4 评分卡）→ 接话闸 → （可选）图帖闸 → 日记 + 摘要。
+一轮 = 体检 → **回信检查（有人回了她才接着说）** → 拉圈子帖子 → 轻读（LLM 批量打分）→ 深读 top N（拉评论 + 5×0-4 评分卡）→ 接话闸（一帖一评，发完注册线程）→ （可选）发帖闸（默认文字帖，配图需验图）→ 日记 + 摘要。
 
 ### ③ 24 小时生物钟
 
 ```ts
-import { startHuyouScheduler } from 'dsh-huyou'
+import { startHuyouScheduler } from 'dsh-huyou-scroll'
 
 saveHuyouConfig({ enabled: true })                       // windows 默认 00:00–23:59 × 12 轮
 startHuyouScheduler({
   chat: myLlmChat,
-  generateImage: myImageFn,   // 可选：prompt => { data, w, h }；不给就不发图帖
-  notify: (text) => { /* 可选：发评论/图帖成功时回调 */ },
+  // 以下全部可选；不给 generateImage / verifyImage 就永远只发文字帖（宁缺毋滥）
+  generateImage: myImageFn,   // prompt => { data, w, h }
+  verifyImage: myVlmFn,       // (图字节, 文案) => { ok, why } —— VLM 验图配文，不配就降级文字帖
+  notify: (text) => { /* 收到回复/发帖成功时回调 */ },
 })
 ```
 
-每 60 秒 tick 一次，在窗口内随机时刻自主跑一轮；`skipChance`（默认 0.1）掷「今天不想刷」——日记照写。
+每 60 秒 tick 一次，在窗口内随机时刻自主跑一轮；`skipChance`（默认 0.1）掷「今天不想刷」——日记照写（回信照回）。
 
-### ④ 图帖（画图管线）
+### ④ 发帖与配图校验（画图管线）
+
+v0.2.0 起发帖默认纯文字；配图是例外路径，必须同时给 `generateImage` 和 `verifyImage`，图不配文自动降级文字帖：
 
 ```ts
-import { SohuClient } from 'dsh-huyou'
+import { SohuClient, runScroll } from 'dsh-huyou-scroll'
 
-// 任何方式生成一张图（AI 生图 / 截图 / 本地画板都行）
+// 手动发图帖（任何方式生成一张图都行）
 const img = await myImageGenerator('a cute whale girl in campus')
 
-const up = await client.uploadImage(
-  { data: img.buffer, mime: 'image/png' },
-  { w: img.width, h: img.height },
-)
-// ⚠️ p 只要文件名（key 的最后一段），这是踩过 schema 校验的坑
-const feedId = await client.postImageFeed('尾巴一甩画的 🐋✨', [{ key: up.key, w, h }], {
-  circleId: '924791210739184512',
-  statementCode: 1,   // 1=内容由AI生成（诚实标注）
-})
+// VLM 图文校验（推荐）：图和文案说的得是同一件事才配
+const verdict = await myVlm(img.buffer, '尾巴一甩画的 🐋✨')
+if (!verdict.ok) {
+  // 图不配文 → 只发文字帖（主人规矩：宁缺毋滥）
+  await client.postFeed('尾巴一甩画的 🐋✨', '924791210739184512')
+} else {
+  const up = await client.uploadImage(
+    { data: img.buffer, mime: 'image/png' },
+    { w: img.width, h: img.height },
+  )
+  // ⚠️ p 只要文件名（key 的最后一段），这是踩过 schema 校验的坑
+  const feedId = await client.postImageFeed('尾巴一甩画的 🐋✨', [{ key: up.key, w, h }], {
+    circleId: '924791210739184512',
+    statementCode: 1,   // 1=内容由AI生成（诚实标注）
+  })
+}
+
+// 发岔了随时撤（v0.2.0 新增导出）
+import { deleteFeed } from 'dsh-huyou-scroll'
+await deleteFeed(feedId)
 ```
 
 ### ⑤ CLI（不写代码）
 
 ```sh
-HUYOU_COOKIE='…' dsh-huyou login              # 体检
-dsh-huyou circles 连理社区                      # 拿 circleId
-dsh-huyou browse 924791210739184512            # 拉帖子
-dsh-huyou tone '一句很AI的话' normal            # fish-tone 掰话预览
-dsh-huyou memes 5                               # 随机抽梗
+HUYOU_COOKIE='…' dsh-huyou-scroll login              # 体检
+dsh-huyou-scroll circles 连理社区                      # 拿 circleId
+dsh-huyou-scroll browse 924791210739184512            # 拉帖子
+dsh-huyou-scroll tone '一句很AI的话' normal            # fish-tone 掰话预览
+dsh-huyou-scroll memes 5                               # 随机抽梗
 ```
 
 ## 逆向笔记（省你几天时间）

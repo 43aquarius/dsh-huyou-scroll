@@ -1,13 +1,27 @@
 /**
- * dsh-huyou 客户端测试 —— 不打真 API，只验证签名算法 / 形状 / 预算闸。
- * 跑法：node --test tests/client.test.mjs（或 bun test tests/client.test.mjs）
+ * dsh-huyou-scroll 客户端测试 —— 不打真 API，只验证签名算法 / 形状 / 预算闸 / 主人规矩。
+ * 跑法：bun test（或 node --experimental-strip-types --test tests/client.test.mjs）
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { HUYOU_BUDGET } from '../src/client.ts'
 import { SohuClient, HuyouError } from '../src/client.ts'
 import { seedOf, humanize, pickMemes, memeCount } from '../src/fishtone/index.ts'
-import { DEFAULT_CONFIG } from '../src/store.ts'
+import { DEFAULT_CONFIG, commentGate, imagePostGate, recordHuyouQuota } from '../src/store.ts'
+import { loadHuyouThreads, upsertHuyouThread, findHuyouThread } from '../src/store.ts'
+
+/** 线程账/闸门测试要落盘 → 用临时数据目录隔离 */
+function withTempDataDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-huyou-test-'))
+  process.env.DSH_HUYOU_DATA_DIR = dir
+  return () => {
+    delete process.env.DSH_HUYOU_DATA_DIR
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
 
 test('预算表形状（防风控参数完整）', () => {
   assert.equal(HUYOU_BUDGET.minGapMs, 1500)
@@ -58,4 +72,73 @@ test('fish-tone：长文/空串防御', () => {
   assert.equal(humanize('', { strength: 'normal' }).text, '')
   const long = '长句子测试。'.repeat(50)
   assert.ok(humanize(long, { strength: 'max' }).text.length > 100)
+})
+
+// ───────────────── 主人规矩（v0.2.0） ─────────────────
+
+test('默认配置：一帖一评 + 回复触发（commentPerRound/replyPerRound，无日上限字段）', () => {
+  assert.ok(DEFAULT_CONFIG.commentPerRound >= 1)
+  assert.ok(DEFAULT_CONFIG.replyPerRound >= 0)
+  assert.equal('commentDaily' in DEFAULT_CONFIG, false)
+  assert.equal('commentCooldownDays' in DEFAULT_CONFIG, false)
+})
+
+test('线程账：upsert → load → find 闭环（回信账的依据）', () => {
+  const restore = withTempDataDir()
+  try {
+    assert.equal(loadHuyouThreads().threads.length, 0)
+    upsertHuyouThread({
+      feedId: 'f1', commentId: 'c1', content: '她说过的话',
+      feedContent: '帖子正文', feedAuthor: '网友',
+      at: new Date().toISOString(),
+      handledReplyIds: [], seenReplyCount: 0, repliesByMe: 0,
+    })
+    assert.equal(findHuyouThread('f1')?.commentId, 'c1')
+    // 更新同一线程不叠条目
+    upsertHuyouThread({
+      feedId: 'f1', commentId: 'c1', content: '她说过的话',
+      feedContent: '帖子正文', feedAuthor: '网友',
+      at: new Date().toISOString(),
+      handledReplyIds: ['r1'], seenReplyCount: 1, repliesByMe: 1,
+    })
+    assert.equal(loadHuyouThreads().threads.length, 1)
+    assert.equal(findHuyouThread('f1')?.repliesByMe, 1)
+  } finally {
+    restore()
+  }
+})
+
+test('评论闸：一帖一评 —— 已有线程的帖子直接拦下', () => {
+  const restore = withTempDataDir()
+  try {
+    const cfg = { ...DEFAULT_CONFIG }
+    assert.equal(commentGate(cfg, 'fresh-feed').ok, true)
+    upsertHuyouThread({
+      feedId: 'said-feed', commentId: 'c1', content: '说过了',
+      feedContent: '', feedAuthor: '',
+      at: new Date().toISOString(),
+      handledReplyIds: [], seenReplyCount: 0, repliesByMe: 0,
+    })
+    const blocked = commentGate(cfg, 'said-feed')
+    assert.equal(blocked.ok, false)
+    assert.match(blocked.reason ?? '', /一帖一评/)
+  } finally {
+    restore()
+  }
+})
+
+test('发帖闸：文字帖+图帖共用每日限额（图是例外路径）', () => {
+  const restore = withTempDataDir()
+  try {
+    const cfg = { ...DEFAULT_CONFIG, imagePostDaily: 2 }
+    assert.equal(imagePostGate(cfg).ok, true)
+    // 手动模拟当日两条帖记录（一条文字一条图）
+    recordHuyouQuota({ at: new Date().toISOString(), type: 'feed', target: 'x', auto: false })
+    recordHuyouQuota({ at: new Date().toISOString(), type: 'image', target: 'y', auto: false })
+    const blocked = imagePostGate(cfg)
+    assert.equal(blocked.ok, false)
+    assert.match(blocked.reason ?? '', /今天已发 2 帖/)
+  } finally {
+    restore()
+  }
 })

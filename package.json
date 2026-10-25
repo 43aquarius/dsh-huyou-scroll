@@ -1,14 +1,14 @@
 {
-  "name": "dsh-huyou",
-  "version": "0.1.0",
-  "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端 + 圈子刷帖引擎 + 24h 生物钟 + 图帖/简介/评论，内置 fish-tone 人味掰话与接梗素材",
+  "name": "dsh-huyou-scroll",
+  "version": "0.2.0",
+  "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端 + 圈子刷帖引擎 + 24h 生物钟；一帖一评+回复触发续评；发帖默认纯文字、配图需 VLM 图文校验；内置 fish-tone 人味掰话与接梗素材",
   "author": "43aquarius",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "bin": {
-    "dsh-huyou": "bin/cli.js"
+    "dsh-huyou-scroll": "bin/cli.js"
   },
   "exports": {
     ".": {
@@ -25,7 +25,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test tests/client.test.mjs"
+    "test": "bun test"
   },
   "engines": {
     "node": ">=18"
@@ -44,10 +44,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/43aquarius/dsh-huyou.git"
+    "url": "git+https://github.com/43aquarius/dsh-huyou-scroll.git"
   },
   "bugs": {
-    "url": "https://github.com/43aquarius/dsh-huyou/issues"
+    "url": "https://github.com/43aquarius/dsh-huyou-scroll/issues"
   },
-  "homepage": "https://github.com/43aquarius/dsh-huyou#readme"
+  "homepage": "https://github.com/43aquarius/dsh-huyou-scroll#readme"
 }

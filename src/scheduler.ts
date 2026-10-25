@@ -1,5 +1,5 @@
 /**
- * dsh-huyou 生物钟 —— 24 小时自主调度器（单文件实现，零依赖）。
+ * dsh-huyou-scroll 生物钟 —— 24 小时自主调度器（单文件实现，零依赖）。
  *
  * 每 60 秒 tick：没计划 → 在窗口内排一个随机时刻（skipChance 掷「今天不想刷」）；
  * 到点 → runScroll 一轮。单例挂 globalThis（热重载不叠定时器）。
@@ -44,7 +44,7 @@ function ensureScheduler() {
 /** 今天还剩几次机会 + 还在不在窗口里 */
 function planNext(cfg: ReturnType<typeof loadHuyouConfig>, state: PlanState | null): PlanState {
   const today = dayOf()
-  if (state && state.date !== today) state = undefined
+  if (state && state.date !== today) state = null
   const wakes = state?.wakes ?? 0
 
   const now = new Date(Date.now() + 8 * 3600_000)
