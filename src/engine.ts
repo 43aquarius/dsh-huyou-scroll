@@ -40,6 +40,8 @@ export interface HuyouEngineDeps {
   verifyImage?: (image: Buffer | Uint8Array, content: string) => Promise<{ ok: boolean; why: string }>
   /** 通知 hook（可选）：收到回复/发帖成功时回调 */
   notify?: (text: string) => void
+  /** 跨平台共享上下文（可选）：query => 提示词块。注入后她在评论/日记里能自然带出别的窗口的经历（宿主的记忆系统提供） */
+  sharedContext?: (query: string) => string
 }
 
 export interface ScrollResult {
@@ -171,7 +173,7 @@ async function checkThreadReplies(
         myComment: t.content,
         replies: toMe.map((r) => ({ userName: r.userName || '网友', content: r.content })),
         myRecentReplies,
-      }, cfg.fishTone)
+      }, cfg.fishTone, deps.sharedContext?.(`${t.feedContent.slice(0, 120)} ${toMe[toMe.length - 1]?.content.slice(0, 60) ?? ''}`) ?? '')
       if (text.trim().length < 2) {
         huyouLog('[huyou] 回信文案太短 → 弃发 ✓')
         upsertHuyouThread(thread)
@@ -234,11 +236,11 @@ export async function runScroll(
       date, light: [], deep: [], commented: null,
       replies: replies.map((r) => ({ to: r.to, reply: r.reply })),
       skipped: true,
-    })
+    }, deps.sharedContext?.(`${date} 狐友 skip 日`) ?? '')
     if (cfg.diaryEnabled) appendHuyouDiary(diary)
     const summary = await draftSummary(deps.chat, persona, {
       date, light: 0, deep: 0, commented: null, replies: replies.length, skipped: true,
-    })
+    }, deps.sharedContext?.(`${date} 狐友 skip 日`) ?? '')
     pushHuyouEvent({
       at: new Date().toISOString(), kind: 'skip',
       note: `今天不想刷（skipChance 掷中）${replies.length ? `，但还是回了 ${replies.length} 条信` : '，也没人找她'}`,
@@ -332,7 +334,7 @@ export async function runScroll(
           .log.filter((x) => x.type === 'comment' || x.type === 'reply')
           .map((x) => x.note ?? '')
           .filter(Boolean)
-        const comment = await draftComment(deps.chat, persona, cand.f, cand.j, recentComments, cfg.fishTone)
+        const comment = await draftComment(deps.chat, persona, cand.f, cand.j, recentComments, cfg.fishTone, deps.sharedContext?.(`${cand.f.content.slice(0, 200)}`) ?? '')
         if (comment.trim().length < 4) {
           huyouLog('[huyou] 文案太短（<4 字）→ 弃发 ✓')
           continue
@@ -387,7 +389,7 @@ export async function runScroll(
           circles: cfg.circles.map((c) => c.name),
           todayVibes: lights.map((l) => l.conclusion).filter(Boolean).slice(0, 6),
           recentPosts,
-        })
+        }, deps.sharedContext?.(`${cfg.circles.map((c) => c.name).join(' ')} ${lights.map((l) => l.conclusion).join(' ').slice(0, 120)}`) ?? '')
         if (!draft.want || !draft.content.trim()) {
           huyouLog(`[huyou] 她这轮不想发帖（${draft.reason}）✓`)
         } else {
@@ -481,7 +483,7 @@ export async function runScroll(
         commented: commented ? { feedId: commented.feedId, content: commented.content, comment: commented.comment } : null,
         replies: replies.map((r) => ({ to: r.to, reply: r.reply })),
         skipped: false,
-      })
+      }, deps.sharedContext?.(`${date} ${lights.map((l) => `${l.conclusion}${l.wantToSay}`.slice(0, 60)).join(' ')}`) ?? '')
       appendHuyouDiary(diary)
       pushHuyouEvent({ at: new Date().toISOString(), kind: 'diary', note: '日记已写' })
     } catch (e: any) {
@@ -493,7 +495,7 @@ export async function runScroll(
     date, light: lights.length, deep: deepResults.length,
     commented: commented ? { feedId: commented.feedId } : null,
     replies: replies.length, skipped: false,
-  })
+  }, deps.sharedContext?.(`${date} 狐友收工`) ?? '')
   pushHuyouEvent({
     at: new Date().toISOString(), kind: 'scroll',
     note: `轻读 ${lights.length} · 深读 ${deepResults.length} · 接话 ${comments.length} · 回信 ${replies.length} · ${postedImage ? `图帖 ${postedImage.feedId}` : postedText ? `文字帖 ${postedText.feedId}` : '没发帖'}`,

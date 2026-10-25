@@ -3,14 +3,22 @@
   "manifestVersion": "0.15",
   "id": "dsh-huyou-scroll.local",
   "name": "dsh-huyou-scroll",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端、圈子刷帖引擎、24h 生物钟；一帖一评+回复触发续评（threads 回信账）；发帖默认纯文字、配图需 verifyImage 图文校验；内置 fish-tone 人味掰话与接梗素材",
   "facets": {
-    "host": { "entry": "src/index.ts", "apiVersion": "v1alpha1" }
+    "host": {
+      "entry": "src/index.ts",
+      "apiVersion": "v1alpha1"
+    }
   },
   "requires": {
-    "contracts": [{ "apiVersion": "tools.dsh/v1alpha1", "kind": "Tool" }]
+    "contracts": [
+      {
+        "apiVersion": "tools.dsh/v1alpha1",
+        "kind": "Tool"
+      }
+    ]
   },
   "permissions": [],
   "contributes": {

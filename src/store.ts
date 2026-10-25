@@ -16,6 +16,8 @@ import type { FishStrength } from './fishtone/index.js'
 export interface HuyouCircle {
   id: string
   name: string
+  /** 拉帖权重（1-5，默认 1）：主刷的圈拿大头预算 */
+  weight?: number
 }
 
 export interface WakeWindow {
@@ -124,7 +126,11 @@ export function loadHuyouConfig(): HuyouConfig {
   cfg.circles = (Array.isArray(cfg.circles) ? cfg.circles : [])
     .filter((c) => c && typeof c.id === 'string' && c.id.trim())
     .slice(0, 4)
-    .map((c) => ({ id: c.id.trim(), name: String(c.name ?? '').trim() || c.id }))
+    .map((c) => ({
+      id: c.id.trim(),
+      name: String(c.name ?? '').trim() || c.id,
+      weight: Math.max(1, Math.min(5, Math.floor(Number(c.weight) || 1))),
+    }))
   cfg.circleListType = cfg.circleListType === 1 ? 1 : 2
   cfg.imagePostDaily = Math.max(0, Math.min(6, Math.floor(Number(cfg.imagePostDaily) || 0)))
   cfg.statementCode = [1, 2, 4, 5, 6, 7].includes(Number(cfg.statementCode)) ? Number(cfg.statementCode) : 1

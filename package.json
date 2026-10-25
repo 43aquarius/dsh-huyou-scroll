@@ -1,6 +1,6 @@
 {
   "name": "dsh-huyou-scroll",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端 + 圈子刷帖引擎 + 24h 生物钟；一帖一评+回复触发续评；发帖默认纯文字、配图需 VLM 图文校验；内置 fish-tone 人味掰话与接梗素材",
   "author": "43aquarius",
   "license": "MIT",

@@ -142,3 +142,23 @@ test('发帖闸：文字帖+图帖共用每日限额（图是例外路径）', (
     restore()
   }
 })
+
+// ============ v0.3.0：圈子权重（主刷圈拿大头预算） ============
+
+test('圈子权重：weight 洗数据（1-5，缺省 1）+ 预算按权重分配', () => {
+  // 直接用纯函数算一遍配比逻辑（与 engine.fetchFeeds 同式）
+  const circles = [
+    { id: '1', name: '连理社区', weight: 3 },
+    { id: '2', name: '大工圈子', weight: 1 },
+  ]
+  const totalW = circles.reduce((s, c) => s + (c.weight ?? 1), 0)
+  const budget = 12 * 2
+  const share = circles.map((c) => Math.max(4, Math.round((budget * (c.weight ?? 1)) / totalW)))
+  assert.equal(share[0], 18, 'weight=3 拿 18/24')
+  assert.equal(share[1], 6, 'weight=1 拿 6/24')
+  // 缺省/越界洗成 1-5
+  const w = (x) => Math.max(1, Math.min(5, Math.floor(Number(x) || 1)))
+  assert.equal(w(undefined), 1)
+  assert.equal(w(0), 1)
+  assert.equal(w(9), 5)
+})

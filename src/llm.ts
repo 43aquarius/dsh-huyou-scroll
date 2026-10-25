@@ -181,6 +181,7 @@ export async function draftComment(
   deep: HuyouDeepJudge,
   recentComments: string[],
   fishTone: FishStrength = 'light',
+  contextBlock = '',
 ): Promise<string> {
   const recent = recentComments.slice(-6).map((c) => c.replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean)
   const recentBlock = recent.length
@@ -194,7 +195,7 @@ export async function draftComment(
     : ''
   const raw = await chat(
     `${GUARD}
-${persona ? `\n${persona}\n` : ''}
+${persona ? `\n${persona}\n` : ''}${contextBlock}
 写一条狐友评论（你深读过、评分 ${deep.total}/20 的那条帖子）：
 - 80 字以内，纯文本，像普通网友自然接话 —— 不是点评，不是总结，更不是广告
 - 可以带 1 个 emoji 表情（最多两个，像真人顺手打的）
@@ -229,6 +230,7 @@ export async function draftReply(
     myRecentReplies: string[]
   },
   fishTone: FishStrength = 'light',
+  contextBlock = '',
 ): Promise<string> {
   const recent = ctx.myRecentReplies.slice(-5).map((c) => c.replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean)
   const recentBlock = recent.length
@@ -236,7 +238,7 @@ export async function draftReply(
     : ''
   const raw = await chat(
     `${GUARD}
-${persona ? `\n${persona}\n` : ''}
+${persona ? `\n${persona}\n` : ''}${contextBlock}
 你在狐友的一条评论下面收到回复了。对方是真人网友，你正在和 TA 对话。
 - 回一句自然的（60 字以内，纯文本），像真的在回消息：对方问什么就答什么，抛梗就接梗，被夸了可以得意或害羞，被怼了可以怼回去但不升级骂战
 - 可以带 1 个 emoji；有你自己的性格
@@ -276,12 +278,13 @@ export async function draftImagePost(
   chat: LlmChat,
   persona: string,
   ctx: { circles: string[]; todayVibes: string[]; recentPosts: string[] },
+  contextBlock = '',
 ): Promise<HuyouImageDraft> {
   const recent = ctx.recentPosts.slice(-5).map((c) => c.replace(/\s+/g, ' ').slice(0, 50)).filter(Boolean)
   const obj = await chatJson<HuyouImageDraft>(
     chat,
     `${GUARD}
-${persona ? `\n${persona}\n` : ''}
+${persona ? `\n${persona}\n` : ''}${contextBlock}
 你刷了一天帖子，现在考虑要不要自己发一条帖子。
 圈子：${ctx.circles.join(' / ')}
 今天你看到的氛围：${ctx.todayVibes.slice(0, 6).join('；') || '（没看到什么特别的）'}
@@ -324,6 +327,7 @@ export async function writeDiary(
     replies?: { to: string; reply: string }[]
     skipped: boolean
   },
+  contextBlock = '',
 ): Promise<string> {
   const lightText = ctx.light
     .map((w) => `- [${w.feedId}] ${w.content.slice(0, 60)}（${w.score}分）：${w.conclusion}｜想说：${w.wantToSay}`)
@@ -336,7 +340,7 @@ export async function writeDiary(
     .join('\n')
   const raw = await chat(
     `${GUARD}
-${persona ? `\n${persona}\n` : ''}
+${persona ? `\n${persona}\n` : ''}${contextBlock}
 今天刷完了一轮，写一篇日记（Markdown，不用代码围栏）。
 有细节有情绪：哪条帖子让你停下来、评论区什么气氛、你想说什么、今天有没有接话。${ctx.commented ? `你今天回了一条评论（写在日记里）。` : '今天没有接话（没遇到值得的 —— 这很正常）。'}${(ctx.replies ?? []).length ? `今天还有人回复了你之前的评论，你回了他（们）—— 写写聊了什么。` : ''}${ctx.skipped ? '今天你掷到了「不想刷」，随便写写为什么（但如果回了信也要写进去）。' : ''}
 
@@ -363,10 +367,11 @@ export async function draftSummary(
   chat: LlmChat,
   persona: string,
   ctx: { date: string; light: number; deep: number; commented: { feedId: string } | null; replies?: number; skipped: boolean },
+  contextBlock = '',
 ): Promise<string> {
   const raw = await chat(
     `${GUARD}
-${persona ? `\n${persona}\n` : ''}
+${persona ? `\n${persona}\n` : ''}${contextBlock}
 收工摘要（两三句，口语，说给主人听 —— 不是汇报，是「今天就这样啦」的感觉）。
 ${ctx.skipped ? '今天掷到「不想刷」，要说明为什么（但如果回了信也要提一句）。' : ''}`,
     `日期：${ctx.date}｜轻读 ${ctx.light} 条｜深读 ${ctx.deep} 条｜${ctx.commented ? `回了评论 [${ctx.commented.feedId}]` : '没接新话'}｜回信 ${ctx.replies ?? 0} 条`,
