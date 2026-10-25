@@ -1,0 +1,53 @@
+{
+  "name": "dsh-huyou",
+  "version": "0.1.0",
+  "description": "狐友（w.sohu.com）逆向 API 插件：签名客户端 + 圈子刷帖引擎 + 24h 生物钟 + 图帖/简介/评论，内置 fish-tone 人味掰话与接梗素材",
+  "author": "43aquarius",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "bin": {
+    "dsh-huyou": "bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "bin",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test tests/client.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "huyou",
+    "sohu",
+    "w.sohu.com",
+    "api-client",
+    "persona",
+    "fish-tone",
+    "bot",
+    "reverse-engineering"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/43aquarius/dsh-huyou.git"
+  },
+  "bugs": {
+    "url": "https://github.com/43aquarius/dsh-huyou/issues"
+  },
+  "homepage": "https://github.com/43aquarius/dsh-huyou#readme"
+}
