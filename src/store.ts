@@ -151,9 +151,28 @@ export function saveHuyouConfig(patch: Partial<HuyouConfig>): HuyouConfig {
 
 const seenFile = () => path.join(dataDir(), 'seen.json')
 
+// v2（2026-10-25 评论率增强）：轻读过的帖子 24h 后自动释放回候选池（帖子可能热了/来了新评论）。
+// 「一帖一评」不受影响：评过的帖子由 threads + quota 永久拦。旧格式（string[]）读到即迁移。
+
+interface SeenEntry { id: string; at: number }
+
+const SEEN_TTL_MS = 24 * 3600_000
+
 export function huyouSeen(): Set<string> {
   try {
-    return new Set(JSON.parse(fs.readFileSync(seenFile(), 'utf-8')) as string[])
+    const raw = JSON.parse(fs.readFileSync(seenFile(), 'utf-8'))
+    if (Array.isArray(raw) && raw.length && typeof raw[0] === 'string') {
+      const now = Date.now()
+      const out = (raw as string[]).map((id) => ({ id, at: now - SEEN_TTL_MS / 2 }))
+      fs.mkdirSync(dataDir(), { recursive: true })
+      fs.writeFileSync(seenFile(), JSON.stringify(out, null, 2))
+      return new Set(raw as string[])
+    }
+    const now = Date.now()
+    const list = (Array.isArray(raw) ? raw : []) as SeenEntry[]
+    return new Set(
+      list.filter((e) => e && typeof e.id === 'string' && now - (Number(e.at) || 0) < SEEN_TTL_MS).map((e) => e.id),
+    )
   } catch {
     return new Set()
   }
@@ -161,9 +180,27 @@ export function huyouSeen(): Set<string> {
 
 export function appendHuyouSeen(feedIds: string[]) {
   if (!feedIds.length) return
-  const cur = [...huyouSeen(), ...feedIds]
+  let list: SeenEntry[] = []
+  try {
+    const raw = JSON.parse(fs.readFileSync(seenFile(), 'utf-8'))
+    if (Array.isArray(raw) && raw.length && typeof raw[0] === 'string') {
+      list = (raw as string[]).map((id) => ({ id, at: Date.now() - SEEN_TTL_MS / 2 }))
+    } else if (Array.isArray(raw)) {
+      list = raw as SeenEntry[]
+    }
+  } catch {
+    /* 新文件 */
+  }
+  const now = Date.now()
+  const map = new Map<string, number>()
+  for (const e of list) if (e?.id) map.set(e.id, Number(e.at) || 0)
+  for (const id of feedIds) map.set(id, now)
+  const out = [...map.entries()]
+    .map(([id, at]) => ({ id, at }))
+    .filter((e) => now - e.at < SEEN_TTL_MS)
+    .slice(-2000)
   fs.mkdirSync(dataDir(), { recursive: true })
-  fs.writeFileSync(seenFile(), JSON.stringify([...new Set(cur)].slice(-2000), null, 2))
+  fs.writeFileSync(seenFile(), JSON.stringify(out, null, 2))
 }
 
 // ───────────────────────── 发言账 ─────────────────────────

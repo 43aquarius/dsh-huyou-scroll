@@ -86,6 +86,21 @@ function scoreFeed(f: HuyouFeedItem, likes: string[], dislikes: string[], selfUs
   return s
 }
 
+/** 写冷却协调器：同一轮里发多条评论/回信/帖子时，主动等冷却窗口过去再发
+ *  （commentPerRound/replyPerRound 提到 4 后，不等冷却必撞 risk 错误杀整轮） */
+const WRITE_GAP_MS = 62_000
+const lastWrite = { at: 0 }
+async function beforeWrite(what: string): Promise<void> {
+  const wait = WRITE_GAP_MS - (Date.now() - lastWrite.at)
+  if (wait > 0) {
+    huyouLog(`uyou] 写冷却等待 ${Math.ceil(wait / 1000)}s（下一笔写：${what}）`)
+    await new Promise((r) => setTimeout(r, wait))
+  }
+}
+function afterWrite(): void {
+  lastWrite.at = Date.now()
+}
+
 /** 拉帖子：圈子模式（配置了 circles 就只刷这些圈子）否则全站推荐流 */
 async function fetchFeeds(
   client: SohuClient,
@@ -179,7 +194,12 @@ async function checkThreadReplies(
         upsertHuyouThread(thread)
         continue
       }
-      const newId = await client.postComment(t.feedId, text, newest.commentId)
+      const newId = await (async () => {
+        await beforeWrite('回信')
+        const id = await client.postComment(t.feedId, text, newest.commentId)
+        afterWrite()
+        return id
+      })()
       thread.repliesByMe += 1
       upsertHuyouThread(thread)
       recordHuyouQuota({
@@ -286,8 +306,10 @@ export async function runScroll(
   appendHuyouSeen(candidates.map((f) => f.feedId))
 
   // 3. 深读
+  // 轻读预筛全灭时保底取 top2 —— 深读才是精确判断
   const ranked = [...lights].sort((a, b) => b.score - a.score)
-  const deepTargets = ranked.slice(0, cfg.deepRead).filter((l) => l.score > 0)
+  let deepTargets = ranked.slice(0, cfg.deepRead).filter((l) => l.score > 0)
+  if (!deepTargets.length && ranked.length) deepTargets = ranked.slice(0, Math.min(2, ranked.length))
   const deepResults: ScrollResult['deep'] = []
   const deepJudges: { f: HuyouFeedItem; j: Awaited<ReturnType<typeof judgeDeep>> }[] = []
 
@@ -339,7 +361,12 @@ export async function runScroll(
           huyouLog('[huyou] 文案太短（<4 字）→ 弃发 ✓')
           continue
         }
-        const commentId = await client.postComment(cand.f.feedId, comment)
+        const commentId = await (async () => {
+          await beforeWrite('评论')
+          const id = await client.postComment(cand.f.feedId, comment)
+          afterWrite()
+          return id
+        })()
         comments.push({ feedId: cand.f.feedId, content: cand.f.content, comment, commentId })
         // 注册对话线程（下次回信检查的依据）
         upsertHuyouThread({
@@ -431,10 +458,12 @@ export async function runScroll(
           }
 
           if (pics) {
+            await beforeWrite('图帖')
             const feedId = await client.postImageFeed(content, pics, {
               circleId: circle.id,
               statementCode: cfg.statementCode,
             })
+            afterWrite()
             postedImage = { feedId, content, picUrl }
             recordHuyouQuota({
               at: new Date().toISOString(), type: 'image', target: feedId,
@@ -447,7 +476,9 @@ export async function runScroll(
             huyouLog(`[huyou] 图帖已发 [${feedId}] →「${circle.name}」：${content}`)
             deps.notify?.(`狐友图帖已发（${circle.name}，已验图配文）：${content}\n${picUrl}`)
           } else {
+            await beforeWrite('文字帖')
             const feedId = await client.postFeed(content, circle.id)
+            afterWrite()
             postedText = { feedId, content }
             recordHuyouQuota({
               at: new Date().toISOString(), type: 'feed', target: feedId,
